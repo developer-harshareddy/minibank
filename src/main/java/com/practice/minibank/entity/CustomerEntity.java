@@ -1,6 +1,8 @@
 
 package com.practice.minibank.entity;
 
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -24,6 +26,9 @@ public class CustomerEntity {
 
 	@Column(nullable = false, length = 10)
 	private String phoneNumber;
+
+	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+	private Instant createdAt;
 
 	protected CustomerEntity() {
 		// Required by JPA
@@ -49,5 +54,9 @@ public class CustomerEntity {
 
 	public String getPhoneNumber() {
 		return phoneNumber;
+	}
+
+	public Instant getCreatedAt() {
+		return createdAt;
 	}
 }
