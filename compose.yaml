@@ -1,0 +1,34 @@
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: minibank_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${MINIBANK_DB_PASSWORD:?Set MINIBANK_DB_PASSWORD in .env}
+    ports:
+      - "5433:5432"
+    volumes:
+      - minibank-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d minibank_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/minibank_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      MINIBANK_DB_PASSWORD: ${MINIBANK_DB_PASSWORD:?Set MINIBANK_DB_PASSWORD in .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  minibank-data:
