@@ -36,10 +36,16 @@ public class CustomerService {
 
 		try {
 			CustomerEntity saved = customerRepository.saveAndFlush(customer);
+
 			return toResponse(saved);
+
 		} catch (DataIntegrityViolationException ex) {
-			// Also handle a concurrent request that inserts the same email.
-			throw new DuplicateEmailException(email);
+			if (isEmailUniqueViolation(ex)) {
+				throw new DuplicateEmailException(email);
+			}
+
+			// Preserve unrelated database integrity errors.
+			throw ex;
 		}
 	}
 
@@ -54,5 +60,20 @@ public class CustomerService {
 	private CustomerResponse toResponse(CustomerEntity customer) {
 		return new CustomerResponse(customer.getId(), customer.getFullName(), customer.getEmail(),
 				customer.getPhoneNumber());
+	}
+
+	private boolean isEmailUniqueViolation(Throwable ex) {
+		for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+
+			if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
+
+				String constraintName = cve.getConstraintName();
+
+				return constraintName != null
+						&& constraintName.equalsIgnoreCase("REPLACE_WITH_ACTUAL_EMAIL_CONSTRAINT");
+			}
+		}
+
+		return false;
 	}
 }
