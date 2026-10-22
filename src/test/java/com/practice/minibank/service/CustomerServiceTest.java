@@ -3,81 +3,82 @@ package com.practice.minibank.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.practice.minibank.dto.CreateCustomerRequest;
 import com.practice.minibank.dto.CustomerResponse;
+import com.practice.minibank.entity.CustomerEntity;
 import com.practice.minibank.exception.CustomerNotFoundException;
 import com.practice.minibank.exception.DuplicateEmailException;
+import com.practice.minibank.repository.CustomerRepository;
 
 class CustomerServiceTest {
 
+	private CustomerRepository customerRepository;
 	private CustomerService customerService;
 
 	@BeforeEach
 	void setUp() {
-		customerService = new CustomerService();
+		customerRepository = org.mockito.Mockito.mock(CustomerRepository.class);
+		customerService = new CustomerService(customerRepository);
 	}
 
 	@Test
 	void shouldRegisterCustomerSuccessfully() {
-		CreateCustomerRequest request = new CreateCustomerRequest("Ravi Kumar", "ravi@example.com", "9876543210");
+		when(customerRepository.existsByEmail("ravi@example.com")).thenReturn(false);
 
-		CustomerResponse response = customerService.registerCustomer(request);
+		when(customerRepository.saveAndFlush(any(CustomerEntity.class))).thenAnswer(invocation -> {
+			CustomerEntity entity = invocation.getArgument(0);
+			ReflectionTestUtils.setField(entity, "id", 1L);
+			return entity;
+		});
+
+		CustomerResponse response = customerService
+				.registerCustomer(new CreateCustomerRequest("Ravi Kumar", "RAVI@EXAMPLE.COM", "9876543210"));
 
 		assertEquals(1L, response.id());
 		assertEquals("Ravi Kumar", response.fullName());
 		assertEquals("ravi@example.com", response.email());
-	}
-
-	@Test
-	void shouldNormalizeEmailToLowercase() {
-		CreateCustomerRequest request = new CreateCustomerRequest("Ravi Kumar", "RAVI@EXAMPLE.COM", "9876543210");
-
-		CustomerResponse response = customerService.registerCustomer(request);
-
-		assertEquals("ravi@example.com", response.email());
+		verify(customerRepository).saveAndFlush(any(CustomerEntity.class));
 	}
 
 	@Test
 	void shouldRejectDuplicateEmail() {
-		CreateCustomerRequest first = new CreateCustomerRequest("Ravi Kumar", "ravi@example.com", "9876543210");
+		when(customerRepository.existsByEmail("ravi@example.com")).thenReturn(true);
 
-		CreateCustomerRequest second = new CreateCustomerRequest("Another Customer", "RAVI@EXAMPLE.COM", "9123456780");
+		assertThrows(DuplicateEmailException.class, () -> customerService
+				.registerCustomer(new CreateCustomerRequest("Ravi Kumar", "RAVI@EXAMPLE.COM", "9876543210")));
 
-		customerService.registerCustomer(first);
-
-		assertThrows(DuplicateEmailException.class, () -> customerService.registerCustomer(second));
+		verify(customerRepository, never()).saveAndFlush(any(CustomerEntity.class));
 	}
 
 	@Test
 	void shouldRetrieveExistingCustomer() {
-		CreateCustomerRequest request = new CreateCustomerRequest("Ravi Kumar", "ravi@example.com", "9876543210");
+		CustomerEntity entity = new CustomerEntity("Ravi Kumar", "ravi@example.com", "9876543210");
 
-		CustomerResponse created = customerService.registerCustomer(request);
+		ReflectionTestUtils.setField(entity, "id", 1L);
 
-		CustomerResponse found = customerService.getCustomerById(created.id());
+		when(customerRepository.findById(1L)).thenReturn(Optional.of(entity));
 
-		assertEquals(created.id(), found.id());
-		assertEquals(created.email(), found.email());
+		CustomerResponse response = customerService.getCustomerById(1L);
+
+		assertEquals(1L, response.id());
+		assertEquals("ravi@example.com", response.email());
 	}
 
 	@Test
-	void shouldThrowExceptionWhenCustomerDoesNotExist() {
+	void shouldThrowWhenCustomerDoesNotExist() {
+		when(customerRepository.findById(999L)).thenReturn(Optional.empty());
+
 		assertThrows(CustomerNotFoundException.class, () -> customerService.getCustomerById(999L));
-	}
-
-	@Test
-	void shouldAssignDifferentIdsToDifferentCustomers() {
-		CustomerResponse first = customerService
-				.registerCustomer(new CreateCustomerRequest("Ravi Kumar", "ravi@example.com", "9876543210"));
-
-		CustomerResponse second = customerService
-				.registerCustomer(new CreateCustomerRequest("Priya Kumar", "priya@example.com", "9123456780"));
-
-		assertEquals(1L, first.id());
-		assertEquals(2L, second.id());
 	}
 }

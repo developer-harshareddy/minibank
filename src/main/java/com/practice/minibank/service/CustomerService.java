@@ -2,56 +2,57 @@
 package com.practice.minibank.service;
 
 import java.util.Locale;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.practice.minibank.dto.CreateCustomerRequest;
 import com.practice.minibank.dto.CustomerResponse;
+import com.practice.minibank.entity.CustomerEntity;
 import com.practice.minibank.exception.CustomerNotFoundException;
 import com.practice.minibank.exception.DuplicateEmailException;
-import com.practice.minibank.model.Customer;
+import com.practice.minibank.repository.CustomerRepository;
 
 @Service
 public class CustomerService {
 
-	private final ConcurrentMap<Long, Customer> customers = new ConcurrentHashMap<>();
+	private final CustomerRepository customerRepository;
 
-	private final ConcurrentMap<String, Long> emailIndex = new ConcurrentHashMap<>();
-
-	private final AtomicLong idGenerator = new AtomicLong(0);
-
-	public synchronized CustomerResponse registerCustomer(CreateCustomerRequest request) {
-
-		String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
-
-		if (emailIndex.containsKey(normalizedEmail)) {
-			throw new DuplicateEmailException(normalizedEmail);
-		}
-
-		long id = idGenerator.incrementAndGet();
-
-		Customer customer = new Customer(id, request.fullName().trim(), normalizedEmail, request.phoneNumber().trim());
-
-		customers.put(id, customer);
-		emailIndex.put(normalizedEmail, id);
-
-		return toResponse(customer);
+	public CustomerService(CustomerRepository customerRepository) {
+		this.customerRepository = customerRepository;
 	}
 
+	@Transactional
+	public CustomerResponse registerCustomer(CreateCustomerRequest request) {
+
+		String email = request.email().trim().toLowerCase(Locale.ROOT);
+
+		if (customerRepository.existsByEmail(email)) {
+			throw new DuplicateEmailException(email);
+		}
+
+		CustomerEntity customer = new CustomerEntity(request.fullName().trim(), email, request.phoneNumber().trim());
+
+		try {
+			CustomerEntity saved = customerRepository.saveAndFlush(customer);
+			return toResponse(saved);
+		} catch (DataIntegrityViolationException ex) {
+			// Also handle a concurrent request that inserts the same email.
+			throw new DuplicateEmailException(email);
+		}
+	}
+
+	@Transactional(readOnly = true)
 	public CustomerResponse getCustomerById(Long id) {
-		Customer customer = customers.get(id);
 
-		if (customer == null) {
-			throw new CustomerNotFoundException(id);
-		}
+		CustomerEntity customer = customerRepository.findById(id).orElseThrow(() -> new CustomerNotFoundException(id));
 
 		return toResponse(customer);
 	}
 
-	private CustomerResponse toResponse(Customer customer) {
-		return new CustomerResponse(customer.id(), customer.fullName(), customer.email(), customer.phoneNumber());
+	private CustomerResponse toResponse(CustomerEntity customer) {
+		return new CustomerResponse(customer.getId(), customer.getFullName(), customer.getEmail(),
+				customer.getPhoneNumber());
 	}
 }
