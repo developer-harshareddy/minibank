@@ -65,14 +65,9 @@ public class CustomerService {
 
 	private boolean isEmailUniqueViolation(Throwable ex) {
 		for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+
 			if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
-				String constraintName = cve.getConstraintName();
-
-				if (constraintName != null) {
-					String name = constraintName.toLowerCase(java.util.Locale.ROOT);
-
-					return name.equals("uk_customers_email") || name.equals("ukrfbvkrffamfql7cjmen8v976v");
-				}
+				return "uk_customers_email".equalsIgnoreCase(cve.getConstraintName());
 			}
 		}
 
