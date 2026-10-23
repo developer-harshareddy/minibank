@@ -11,9 +11,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "customers")
+@Table(name = "customers", uniqueConstraints = {
+		@jakarta.persistence.UniqueConstraint(name = "uk_customers_email", columnNames = "email") })
 public class CustomerEntity {
-
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -21,7 +21,7 @@ public class CustomerEntity {
 	@Column(nullable = false, length = 100)
 	private String fullName;
 
-	@Column(nullable = false, unique = true, length = 254)
+	@Column(nullable = false, length = 254)
 	private String email;
 
 	@Column(nullable = false, length = 10)
