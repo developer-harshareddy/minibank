@@ -44,9 +44,10 @@ public class CustomerService {
 				throw new DuplicateEmailException(email);
 			}
 
-			// Preserve unrelated database integrity errors.
+			// Do not misclassify other database errors.
 			throw ex;
 		}
+
 	}
 
 	@Transactional(readOnly = true)
@@ -64,13 +65,14 @@ public class CustomerService {
 
 	private boolean isEmailUniqueViolation(Throwable ex) {
 		for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
-
 			if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
-
 				String constraintName = cve.getConstraintName();
 
-				return constraintName != null
-						&& constraintName.equalsIgnoreCase("REPLACE_WITH_ACTUAL_EMAIL_CONSTRAINT");
+				if (constraintName != null) {
+					String name = constraintName.toLowerCase(java.util.Locale.ROOT);
+
+					return name.equals("uk_customers_email") || name.equals("ukrfbvkrffamfql7cjmen8v976v");
+				}
 			}
 		}
 
