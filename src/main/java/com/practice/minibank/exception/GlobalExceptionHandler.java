@@ -9,9 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -20,13 +20,13 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(CustomerNotFoundException.class)
 	public ResponseEntity<ApiError> handleNotFound(CustomerNotFoundException ex) {
-
+		log.warn("Customer lookup failed: resource not found");
 		return error(HttpStatus.NOT_FOUND, ex.getMessage(), Map.of());
 	}
 
 	@ExceptionHandler(DuplicateEmailException.class)
 	public ResponseEntity<ApiError> handleDuplicateEmail(DuplicateEmailException ex) {
-
+		log.warn("Customer creation rejected: duplicate email");
 		return error(HttpStatus.CONFLICT, ex.getMessage(), Map.of());
 	}
 
@@ -38,17 +38,23 @@ public class GlobalExceptionHandler {
 		ex.getBindingResult().getFieldErrors()
 				.forEach(fieldError -> fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage()));
 
+		log.warn("Request validation failed: {} field error(s)", fieldErrors.size());
+
 		return error(HttpStatus.BAD_REQUEST, "Request validation failed", fieldErrors);
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<ApiError> handleMalformedJson(HttpMessageNotReadableException ex) {
 
+		log.warn("Request rejected: missing or malformed JSON body");
+
 		return error(HttpStatus.BAD_REQUEST, "Request body is missing or contains invalid JSON", Map.of());
 	}
 
 	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
 	public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+
+		log.warn("Request rejected: invalid value for parameter '{}'", ex.getName());
 
 		return error(HttpStatus.BAD_REQUEST, "Invalid value for parameter: " + ex.getName(), Map.of());
 	}
