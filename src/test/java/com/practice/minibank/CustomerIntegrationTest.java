@@ -134,4 +134,48 @@ class CustomerIntegrationTest {
 		}
 	}
 
+	@Test
+	void shouldRejectInvalidCustomerRequest() throws Exception {
+
+		String requestJson = """
+				{
+				    "fullName": " ",
+				    "email": "not-an-email",
+				    "phoneNumber": "123"
+				}
+				""";
+
+		mockMvc.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+				.andExpect(jsonPath("$.error").value("Bad Request"))
+				.andExpect(jsonPath("$.message").value("Request validation failed"))
+				.andExpect(jsonPath("$.fieldErrors.fullName").exists())
+				.andExpect(jsonPath("$.fieldErrors.email").exists())
+				.andExpect(jsonPath("$.fieldErrors.phoneNumber").exists());
+	}
+
+	@Test
+	void shouldRejectMalformedJson() throws Exception {
+
+		mockMvc.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content("{ invalid json"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+				.andExpect(jsonPath("$.message").value("Request body is missing or contains invalid JSON"));
+	}
+
+	@Test
+	void shouldReturnNotFoundForMissingCustomer() throws Exception {
+
+		mockMvc.perform(get("/api/v1/customers/{id}", 999999999L)).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.status").value(404)).andExpect(jsonPath("$.error").value("Not Found"))
+				.andExpect(jsonPath("$.message").value("Customer not found with id: 999999999"));
+	}
+
+	@Test
+	void shouldRejectNonnumericCustomerId() throws Exception {
+
+		mockMvc.perform(get("/api/v1/customers/{id}", "abc")).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.status").value(400))
+				.andExpect(jsonPath("$.message").value("Invalid value for parameter: id"));
+	}
+
 }
