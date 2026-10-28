@@ -21,17 +21,24 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.practice.minibank.dto.CustomerResponse;
+import com.practice.minibank.dto.LoginRequest;
+import com.practice.minibank.dto.LoginResponse;
+import com.practice.minibank.dto.RegisterRequest;
 import com.practice.minibank.repository.CustomerRepository;
 
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class CustomerIntegrationTest {
 
 	@Autowired
@@ -43,6 +50,32 @@ class CustomerIntegrationTest {
 	@Autowired
 	private CustomerRepository customerRepository;
 
+	private String obtainAccessToken() throws Exception {
+		String email = "auth-" + UUID.randomUUID() + "@example.com";
+		String password = "IntegrationTestPassword123!";
+
+		String registerJson = objectMapper
+				.writeValueAsString(new RegisterRequest("Integration Test User", email, password));
+
+		mockMvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON).content(registerJson))
+				.andExpect(status().isCreated());
+
+		String loginJson = objectMapper.writeValueAsString(new LoginRequest(email, password));
+
+		MvcResult loginResult = mockMvc
+				.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(loginJson))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.accessToken").exists()).andReturn();
+
+		LoginResponse loginResponse = objectMapper.readValue(loginResult.getResponse().getContentAsString(),
+				LoginResponse.class);
+
+		return loginResponse.accessToken();
+	}
+
+	private MockHttpServletRequestBuilder authenticated(MockHttpServletRequestBuilder request) throws Exception {
+		return request.header(HttpHeaders.AUTHORIZATION, "Bearer " + obtainAccessToken());
+	}
+
 	@Test
 	void shouldRegisterCustomerInPostgresAndRetrieveIt() throws Exception {
 
@@ -52,7 +85,8 @@ class CustomerIntegrationTest {
 				.writeValueAsString(new CustomerRequest("Integration Test Customer", email, "9876543210"));
 
 		MvcResult postResult = mockMvc
-				.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson))
+				.perform(authenticated(
+						post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson)))
 				.andExpect(status().isCreated()).andExpect(jsonPath("$.email").value(email)).andReturn();
 
 		CustomerResponse response = objectMapper.readValue(postResult.getResponse().getContentAsString(),
@@ -60,7 +94,7 @@ class CustomerIntegrationTest {
 
 		long customerId = response.id();
 
-		mockMvc.perform(get("/api/v1/customers/{id}", customerId)).andExpect(status().isOk())
+		mockMvc.perform(authenticated(get("/api/v1/customers/{id}", customerId))).andExpect(status().isOk())
 				.andExpect(jsonPath("$.id").value(customerId))
 				.andExpect(jsonPath("$.fullName").value("Integration Test Customer"))
 				.andExpect(jsonPath("$.email").value(email)).andExpect(jsonPath("$.phoneNumber").value("9876543210"));
@@ -74,10 +108,12 @@ class CustomerIntegrationTest {
 		String requestJson = objectMapper
 				.writeValueAsString(new CustomerRequest("Duplicate Test Customer", email, "9876543210"));
 
-		mockMvc.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson))
+		mockMvc.perform(
+				authenticated(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson)))
 				.andExpect(status().isCreated());
 
-		mockMvc.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson))
+		mockMvc.perform(
+				authenticated(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson)))
 				.andExpect(status().isConflict());
 	}
 
@@ -106,7 +142,8 @@ class CustomerIntegrationTest {
 				}
 
 				return mockMvc
-						.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson))
+						.perform(authenticated(
+								post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson)))
 						.andReturn().getResponse().getStatus();
 			};
 
@@ -145,7 +182,8 @@ class CustomerIntegrationTest {
 				}
 				""";
 
-		mockMvc.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson))
+		mockMvc.perform(
+				authenticated(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content(requestJson)))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
 				.andExpect(jsonPath("$.error").value("Bad Request"))
 				.andExpect(jsonPath("$.message").value("Request validation failed"))
@@ -157,7 +195,8 @@ class CustomerIntegrationTest {
 	@Test
 	void shouldRejectMalformedJson() throws Exception {
 
-		mockMvc.perform(post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content("{ invalid json"))
+		mockMvc.perform(authenticated(
+				post("/api/v1/customers").contentType(MediaType.APPLICATION_JSON).content("{ invalid json")))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
 				.andExpect(jsonPath("$.message").value("Request body is missing or contains invalid JSON"));
 	}
@@ -165,7 +204,7 @@ class CustomerIntegrationTest {
 	@Test
 	void shouldReturnNotFoundForMissingCustomer() throws Exception {
 
-		mockMvc.perform(get("/api/v1/customers/{id}", 999999999L)).andExpect(status().isNotFound())
+		mockMvc.perform(authenticated(get("/api/v1/customers/{id}", 999999999L))).andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.status").value(404)).andExpect(jsonPath("$.error").value("Not Found"))
 				.andExpect(jsonPath("$.message").value("Customer not found with id: 999999999"));
 	}
@@ -173,7 +212,7 @@ class CustomerIntegrationTest {
 	@Test
 	void shouldRejectNonnumericCustomerId() throws Exception {
 
-		mockMvc.perform(get("/api/v1/customers/{id}", "abc")).andExpect(status().isBadRequest())
+		mockMvc.perform(authenticated(get("/api/v1/customers/{id}", "abc"))).andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.status").value(400))
 				.andExpect(jsonPath("$.message").value("Invalid value for parameter: id"));
 	}

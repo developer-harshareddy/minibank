@@ -73,4 +73,20 @@ public class GlobalExceptionHandler {
 
 		return ResponseEntity.status(status).body(body);
 	}
+
+	@ExceptionHandler(DuplicateUserEmailException.class)
+	public ResponseEntity<ApiError> handleDuplicateUserEmail(DuplicateUserEmailException ex) {
+
+		log.warn("Account registration rejected: duplicate email");
+
+		return error(HttpStatus.CONFLICT, ex.getMessage(), Map.of());
+	}
+
+	@ExceptionHandler(InvalidPasswordException.class)
+	public ResponseEntity<ApiError> handleInvalidPassword(InvalidPasswordException ex) {
+
+		log.warn("Account registration rejected: password exceeds supported length");
+
+		return error(HttpStatus.BAD_REQUEST, ex.getMessage(), Map.of("password", ex.getMessage()));
+	}
 }

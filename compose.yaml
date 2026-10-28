@@ -31,6 +31,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/minibank_db
       SPRING_DATASOURCE_USERNAME: postgres
       MINIBANK_DB_PASSWORD: ${MINIBANK_DB_PASSWORD:?Set MINIBANK_DB_PASSWORD in .env}
+      MINIBANK_JWT_SECRET_BASE64: ${MINIBANK_JWT_SECRET_BASE64:?Set MINIBANK_JWT_SECRET_BASE64 in .env}
     depends_on:
       postgres:
         condition: service_healthy
